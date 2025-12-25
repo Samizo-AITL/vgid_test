@@ -6,177 +6,225 @@
 <title>Galaxy Requiem</title>
 <style>
 html,body{
-  margin:0; padding:0;
+  margin:0;
+  padding:0;
   background:#000;
   overflow:hidden;
 }
 canvas{display:block;}
 .hint{
   position:fixed;
-  bottom:24px; left:50%;
+  bottom:24px;
+  left:50%;
   transform:translateX(-50%);
-  color:rgba(255,255,255,.65);
+  color:rgba(255,255,255,.7);
   font:12px system-ui;
-  letter-spacing:.15em;
+  letter-spacing:.2em;
 }
 </style>
 </head>
 <body>
+
 <canvas id="c"></canvas>
-<div class="hint">CLICK TO INITIATE HYPERDRIVE</div>
+<div class="hint">CLICK OR PRESS ANY KEY</div>
 
 <script>
-/* ===============================
-   GALAXY REQUIEM
-   cinematic opening experience
-   =============================== */
+/* =====================================================
+   GALAXY REQUIEM : CINEMATIC OPENING EXPERIENCE
+   Canvas + WebAudio / No external dependencies
+   ===================================================== */
 
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
+
 function resize(){
-  const dpr=Math.min(2,devicePixelRatio||1);
-  canvas.width=innerWidth*dpr;
-  canvas.height=innerHeight*dpr;
-  canvas.style.width=innerWidth+"px";
-  canvas.style.height=innerHeight+"px";
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  canvas.width = innerWidth * dpr;
+  canvas.height = innerHeight * dpr;
+  canvas.style.width = innerWidth + "px";
+  canvas.style.height = innerHeight + "px";
   ctx.setTransform(1,0,0,1,0,0);
   ctx.scale(dpr,dpr);
 }
-addEventListener("resize",resize);
+addEventListener("resize", resize);
 resize();
 
-const CX=()=>innerWidth/2;
-const CY=()=>innerHeight/2;
+const CX = () => innerWidth / 2;
+const CY = () => innerHeight / 2;
 
-/* ===== audio (cinematic low drone) ===== */
-let audioCtx, osc, gain, started=false;
-function initAudio(){
-  audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-  osc=audioCtx.createOscillator();
-  gain=audioCtx.createGain();
-  osc.type="sine";
-  osc.frequency.value=32; // deep space drone
-  gain.gain.value=0.0;
-  osc.connect(gain).connect(audioCtx.destination);
-  osc.start();
-  gain.gain.linearRampToValueAtTime(0.15,audioCtx.currentTime+4);
+/* =======================
+   AUDIO ENGINE (GUARANTEED)
+   ======================= */
+let audioCtx, master, osc1, osc2, lfo, lfoGain;
+let audioStarted = false;
+
+function startAudio(){
+  if(audioStarted) return;
+  audioStarted = true;
+
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  master = audioCtx.createGain();
+  master.gain.value = 0.0;
+  master.connect(audioCtx.destination);
+
+  osc1 = audioCtx.createOscillator(); // deep bass
+  osc1.type = "sine";
+  osc1.frequency.value = 32;
+
+  osc2 = audioCtx.createOscillator(); // harmonic
+  osc2.type = "triangle";
+  osc2.frequency.value = 64;
+
+  lfo = audioCtx.createOscillator();  // breathing
+  lfo.type = "sine";
+  lfo.frequency.value = 0.08;
+
+  lfoGain = audioCtx.createGain();
+  lfoGain.gain.value = 18;
+
+  lfo.connect(lfoGain).connect(osc1.frequency);
+
+  osc1.connect(master);
+  osc2.connect(master);
+
+  osc1.start();
+  osc2.start();
+  lfo.start();
+
+  master.gain.linearRampToValueAtTime(
+    0.18,
+    audioCtx.currentTime + 4
+  );
+
+  document.querySelector(".hint")?.remove();
 }
-addEventListener("click",()=>{
-  if(!started){
-    initAudio();
-    document.querySelector(".hint").remove();
-    started=true;
-  }
-});
 
-/* ===== galaxy ===== */
-const STARS=6000;
-const galaxy=[];
+// 必ず音を出すためのユーザー操作フック
+addEventListener("pointerdown", startAudio, { once:true });
+addEventListener("keydown", startAudio, { once:true });
+
+/* =======================
+   GALAXY DATA
+   ======================= */
+const STARS = 6000;
+const galaxy = [];
+
 for(let i=0;i<STARS;i++){
-  const r=Math.pow(Math.random(),0.35);
+  const r = Math.pow(Math.random(),0.35);
   galaxy.push({
     r,
-    a:r*10+Math.random()*0.8,
-    z:Math.random(),
-    s:0.6+Math.random()*1.8,
-    h:190+Math.random()*60
+    a: r*10 + Math.random()*0.8,
+    s: 0.6 + Math.random()*1.6,
+    h: 190 + Math.random()*60
   });
 }
 
-/* ===== warp stars ===== */
-const WARP=1400;
-const warp=[];
-function reset(w){
-  w.x=(Math.random()-0.5)*2;
-  w.y=(Math.random()-0.5)*2;
-  w.z=Math.random();
+/* warp stars */
+const WARP_N = 1400;
+const warpStars = [];
+function resetWarp(s){
+  s.x = (Math.random()-0.5)*2;
+  s.y = (Math.random()-0.5)*2;
+  s.z = Math.random();
 }
-for(let i=0;i<WARP;i++){
-  const w={};
-  reset(w);
-  warp.push(w);
+for(let i=0;i<WARP_N;i++){
+  const s = {};
+  resetWarp(s);
+  warpStars.push(s);
 }
 
-let t=0;
+/* =======================
+   MAIN LOOP
+   ======================= */
+let t = 0;
 
 function draw(){
-  ctx.fillStyle="rgba(0,0,0,0.25)";
+  ctx.fillStyle = "rgba(0,0,0,0.25)";
   ctx.fillRect(0,0,innerWidth,innerHeight);
 
-  // timeline
-  const time=t%36;
-  const zoomIn=Math.min(1,time/10);
-  const warpOn=Math.max(0,Math.min(1,(time-9)/6));
-  const zoomOut=Math.max(0,Math.min(1,(time-22)/10));
+  const time = t % 36;
 
-  const zoom=1+zoomIn*5-zoomOut*4;
+  const zoomIn  = Math.min(1, time/10);
+  const warp    = Math.max(0, Math.min(1, (time-9)/6));
+  const zoomOut = Math.max(0, Math.min(1, (time-22)/10));
 
-  if(started){
-    osc.frequency.setTargetAtTime(
-      32+warpOn*40,
+  const zoom = 1 + zoomIn*5 - zoomOut*4;
+
+  // audio sync
+  if(audioStarted){
+    osc1.frequency.setTargetAtTime(
+      32 + warp*48,
       audioCtx.currentTime,
-      0.8
+      0.2
+    );
+    osc2.frequency.setTargetAtTime(
+      64 + warp*120,
+      audioCtx.currentTime,
+      0.2
     );
   }
 
   ctx.save();
-  ctx.translate(CX(),CY());
-  ctx.scale(zoom,zoom);
+  ctx.translate(CX(), CY());
+  ctx.scale(zoom, zoom);
 
-  // galaxy
+  // galaxy draw
   galaxy.forEach(s=>{
-    const a=s.a+t*0.04;
-    const r=s.r*Math.min(innerWidth,innerHeight)*0.48;
-    let x=Math.cos(a)*r;
-    let y=Math.sin(a)*r;
+    const a = s.a + t*0.04;
+    const r = s.r * Math.min(innerWidth,innerHeight)*0.48;
+    let x = Math.cos(a)*r;
+    let y = Math.sin(a)*r;
 
-    const d=Math.sqrt(x*x+y*y)+1;
-    const lens=1+warpOn/(d*0.02);
-    x*=lens; y*=lens;
+    const d = Math.sqrt(x*x + y*y) + 1;
+    const lens = 1 + warp/(d*0.02);
+    x *= lens; y *= lens;
 
-    ctx.fillStyle=`hsla(${s.h},100%,70%,${1-warpOn})`;
+    ctx.fillStyle = `hsla(${s.h},100%,70%,${1-warp})`;
     ctx.fillRect(x,y,s.s,s.s);
   });
 
   // core glow
-  const core=ctx.createRadialGradient(0,0,0,0,0,120);
-  core.addColorStop(0,"rgba(255,255,255,0.35)");
-  core.addColorStop(0.4,"rgba(120,170,255,0.18)");
+  const core = ctx.createRadialGradient(0,0,0,0,0,140);
+  core.addColorStop(0,"rgba(255,255,255,0.4)");
+  core.addColorStop(0.4,"rgba(140,180,255,0.22)");
   core.addColorStop(1,"rgba(0,0,0,0)");
-  ctx.fillStyle=core;
+  ctx.fillStyle = core;
   ctx.beginPath();
-  ctx.arc(0,0,120,0,Math.PI*2);
+  ctx.arc(0,0,140,0,Math.PI*2);
   ctx.fill();
 
   ctx.restore();
 
-  // warp
-  if(warpOn>0){
-    warp.forEach(w=>{
-      w.z-=0.02*warpOn;
-      if(w.z<0.02) reset(w);
-      const x=CX()+w.x/w.z*CX();
-      const y=CY()+w.y/w.z*CY();
-      const len=(1-w.z)*25*warpOn;
-      ctx.strokeStyle="rgba(255,255,255,0.8)";
+  // warp stars
+  if(warp > 0){
+    warpStars.forEach(s=>{
+      s.z -= 0.02 * warp;
+      if(s.z < 0.02) resetWarp(s);
+
+      const x = CX() + s.x/s.z * CX();
+      const y = CY() + s.y/s.z * CY();
+      const len = (1-s.z)*25*warp;
+
+      ctx.strokeStyle = "rgba(255,255,255,0.85)";
       ctx.beginPath();
       ctx.moveTo(x,y);
-      ctx.lineTo(x-w.x*len,y-w.y*len);
+      ctx.lineTo(x - s.x*len, y - s.y*len);
       ctx.stroke();
     });
   }
 
-  // title reveal
-  if(time>3 && time<9){
+  // title
+  if(time > 3 && time < 9){
     ctx.save();
-    ctx.fillStyle="rgba(255,255,255,0.6)";
-    ctx.font="48px serif";
-    ctx.textAlign="center";
-    ctx.fillText("GALAXY REQUIEM",CX(),CY()+innerHeight*0.28);
+    ctx.fillStyle = "rgba(255,255,255,0.6)";
+    ctx.font = "48px serif";
+    ctx.textAlign = "center";
+    ctx.fillText("GALAXY REQUIEM", CX(), CY() + innerHeight*0.28);
     ctx.restore();
   }
 
-  t+=0.016;
+  t += 0.016;
   requestAnimationFrame(draw);
 }
 
