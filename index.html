@@ -1,485 +1,186 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>Galaxy Hyperdrive Cinematic</title>
-  <style>
-    html, body { margin:0; padding:0; background:#000; overflow:hidden; }
-    canvas { display:block; width:100vw; height:100vh; }
-    .hud{
-      position:fixed; inset:16px 16px auto auto;
-      display:flex; gap:10px; align-items:center;
-      padding:10px 12px; border:1px solid rgba(255,255,255,.12);
-      background:rgba(0,0,0,.35); backdrop-filter: blur(8px);
-      border-radius:14px; color:rgba(255,255,255,.85);
-      font: 12px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif;
-      user-select:none;
-    }
-    .hud a{
-      color:rgba(255,255,255,.9);
-      text-decoration:none;
-      border:1px solid rgba(255,255,255,.14);
-      padding:6px 10px;
-      border-radius:12px;
-    }
-    .hud a:hover{ background:rgba(255,255,255,.12); }
-    .hud .dot{
-      width:8px; height:8px; border-radius:99px;
-      background: radial-gradient(circle at 30% 30%, #fff, rgba(255,255,255,.05));
-      box-shadow: 0 0 14px rgba(140,220,255,.75);
-    }
-    .hud .label{ opacity:.8; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Galaxy Requiem</title>
+<style>
+html,body{
+  margin:0; padding:0;
+  background:#000;
+  overflow:hidden;
+}
+canvas{display:block;}
+.hint{
+  position:fixed;
+  bottom:24px; left:50%;
+  transform:translateX(-50%);
+  color:rgba(255,255,255,.65);
+  font:12px system-ui;
+  letter-spacing:.15em;
+}
+</style>
 </head>
 <body>
-  <canvas id="c"></canvas>
-  <div class="hud">
-    <div class="dot"></div>
-    <div class="label">GALAXY HYPERDRIVE</div>
-    <a href="./docs/">Docs →</a>
-  </div>
+<canvas id="c"></canvas>
+<div class="hint">CLICK TO INITIATE HYPERDRIVE</div>
 
 <script>
-(() => {
-  const canvas = document.getElementById("c");
-  const ctx = canvas.getContext("2d", { alpha: true });
+/* ===============================
+   GALAXY REQUIEM
+   cinematic opening experience
+   =============================== */
 
-  // Offscreen for "pseudo-bloom" (light buffer)
-  const glow = document.createElement("canvas");
-  const gtx  = glow.getContext("2d", { alpha: true });
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+function resize(){
+  const dpr=Math.min(2,devicePixelRatio||1);
+  canvas.width=innerWidth*dpr;
+  canvas.height=innerHeight*dpr;
+  canvas.style.width=innerWidth+"px";
+  canvas.style.height=innerHeight+"px";
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.scale(dpr,dpr);
+}
+addEventListener("resize",resize);
+resize();
 
-  function resize(){
-    const dpr = Math.max(1, Math.min(2, devicePixelRatio || 1));
-    canvas.width  = Math.floor(innerWidth  * dpr);
-    canvas.height = Math.floor(innerHeight * dpr);
-    canvas.style.width  = innerWidth + "px";
-    canvas.style.height = innerHeight + "px";
-    ctx.setTransform(1,0,0,1,0,0);
+const CX=()=>innerWidth/2;
+const CY=()=>innerHeight/2;
 
-    glow.width  = canvas.width;
-    glow.height = canvas.height;
-    gtx.setTransform(1,0,0,1,0,0);
-
-    state.dpr = dpr;
+/* ===== audio (cinematic low drone) ===== */
+let audioCtx, osc, gain, started=false;
+function initAudio(){
+  audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  osc=audioCtx.createOscillator();
+  gain=audioCtx.createGain();
+  osc.type="sine";
+  osc.frequency.value=32; // deep space drone
+  gain.gain.value=0.0;
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start();
+  gain.gain.linearRampToValueAtTime(0.15,audioCtx.currentTime+4);
+}
+addEventListener("click",()=>{
+  if(!started){
+    initAudio();
+    document.querySelector(".hint").remove();
+    started=true;
   }
-  addEventListener("resize", resize);
+});
 
-  // ===== Utilities =====
-  const clamp = (x,a,b)=>Math.max(a,Math.min(b,x));
-  const lerp  = (a,b,t)=>a+(b-a)*t;
-  const smooth = (t)=>t*t*(3-2*t);
-  const easeInOut = (t)=> (t<0.5) ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
-  function rand(){ return Math.random(); }
-  function hash(n){ // deterministic-ish noise
-    const x = Math.sin(n*127.1)*43758.5453123;
-    return x - Math.floor(x);
+/* ===== galaxy ===== */
+const STARS=6000;
+const galaxy=[];
+for(let i=0;i<STARS;i++){
+  const r=Math.pow(Math.random(),0.35);
+  galaxy.push({
+    r,
+    a:r*10+Math.random()*0.8,
+    z:Math.random(),
+    s:0.6+Math.random()*1.8,
+    h:190+Math.random()*60
+  });
+}
+
+/* ===== warp stars ===== */
+const WARP=1400;
+const warp=[];
+function reset(w){
+  w.x=(Math.random()-0.5)*2;
+  w.y=(Math.random()-0.5)*2;
+  w.z=Math.random();
+}
+for(let i=0;i<WARP;i++){
+  const w={};
+  reset(w);
+  warp.push(w);
+}
+
+let t=0;
+
+function draw(){
+  ctx.fillStyle="rgba(0,0,0,0.25)";
+  ctx.fillRect(0,0,innerWidth,innerHeight);
+
+  // timeline
+  const time=t%36;
+  const zoomIn=Math.min(1,time/10);
+  const warpOn=Math.max(0,Math.min(1,(time-9)/6));
+  const zoomOut=Math.max(0,Math.min(1,(time-22)/10));
+
+  const zoom=1+zoomIn*5-zoomOut*4;
+
+  if(started){
+    osc.frequency.setTargetAtTime(
+      32+warpOn*40,
+      audioCtx.currentTime,
+      0.8
+    );
   }
 
-  // ===== Scene State =====
-  const state = {
-    dpr: 1,
-    t: 0,
-    last: performance.now(),
-    mx: 0, my: 0,
-    // pointer adds mild parallax
-    parX: 0, parY: 0
-  };
+  ctx.save();
+  ctx.translate(CX(),CY());
+  ctx.scale(zoom,zoom);
 
-  addEventListener("pointermove", (e)=>{
-    state.mx = (e.clientX / innerWidth  - 0.5);
-    state.my = (e.clientY / innerHeight - 0.5);
+  // galaxy
+  galaxy.forEach(s=>{
+    const a=s.a+t*0.04;
+    const r=s.r*Math.min(innerWidth,innerHeight)*0.48;
+    let x=Math.cos(a)*r;
+    let y=Math.sin(a)*r;
+
+    const d=Math.sqrt(x*x+y*y)+1;
+    const lens=1+warpOn/(d*0.02);
+    x*=lens; y*=lens;
+
+    ctx.fillStyle=`hsla(${s.h},100%,70%,${1-warpOn})`;
+    ctx.fillRect(x,y,s.s,s.s);
   });
 
-  // ===== Galaxy Particles (multi-layer) =====
-  // We build: core dust + arm stars + faint nebula specks
-  function makeGalaxy(count, kind){
-    const arr = new Array(count);
-    for(let i=0;i<count;i++){
-      // radius distribution differs by kind
-      let rPow = (kind==="core") ? 0.18 : (kind==="arms") ? 0.45 : 0.75;
-      const rr = Math.pow(rand(), rPow);      // 0..1
-      const armCount = 3;
-      const arm = Math.floor(rand()*armCount);
+  // core glow
+  const core=ctx.createRadialGradient(0,0,0,0,0,120);
+  core.addColorStop(0,"rgba(255,255,255,0.35)");
+  core.addColorStop(0.4,"rgba(120,170,255,0.18)");
+  core.addColorStop(1,"rgba(0,0,0,0)");
+  ctx.fillStyle=core;
+  ctx.beginPath();
+  ctx.arc(0,0,120,0,Math.PI*2);
+  ctx.fill();
 
-      // spiral angle shaped by radius
-      const base = rr*10 + arm*(Math.PI*2/armCount);
-      const jitter = (kind==="nebula") ? (rand()-0.5)*2.2 : (rand()-0.5)*0.9;
-      const a = base + jitter;
+  ctx.restore();
 
-      // size/brightness
-      const z = rand(); // depth-ish
-      const size = (kind==="core") ? (0.9 + rand()*1.8)
-                 : (kind==="arms") ? (0.7 + rand()*1.6)
-                 : (0.5 + rand()*1.1);
-
-      // color temperature: mix of blue/white/yellow/red
-      const temp = rand();
-      // hue around: blue(205) -> white(0 sat) -> yellow(45) -> red(10)
-      let hue, sat, lig;
-      if(temp < 0.45){ hue = 205 + rand()*55; sat = 90; lig = 70; }
-      else if(temp < 0.75){ hue = 40 + rand()*20; sat = 85; lig = 72; }
-      else { hue = 10 + rand()*25; sat = 85; lig = 68; }
-
-      const alpha = (kind==="nebula") ? 0.25 + rand()*0.35
-                  : (kind==="core") ? 0.35 + rand()*0.65
-                  : 0.25 + rand()*0.70;
-
-      arr[i] = { rr, a, z, size, hue, sat, lig, alpha, arm };
-    }
-    return arr;
-  }
-
-  const galaxyCore  = makeGalaxy(2200, "core");
-  const galaxyArms  = makeGalaxy(5200, "arms");
-  const galaxyNeb   = makeGalaxy(1800, "nebula");
-
-  // ===== Warp Starfield (3D) =====
-  const STAR_N = 1800;
-  const stars = new Array(STAR_N);
-  function resetStar(s){
-    // distributed so center isn't empty; slightly biased outward
-    const rx = (rand()-0.5);
-    const ry = (rand()-0.5);
-    s.x = rx*2;
-    s.y = ry*2;
-    s.z = rand();                 // 0..1
-    // colored star streaks
-    const temp = rand();
-    if(temp < 0.5){ s.h = 200 + rand()*70; s.s = 90; s.l = 70; }
-    else if(temp < 0.8){ s.h = 40 + rand()*25; s.s = 90; s.l = 74; }
-    else { s.h = 10 + rand()*25; s.s = 92; s.l = 70; }
-  }
-  for(let i=0;i<STAR_N;i++){
-    stars[i] = {};
-    resetStar(stars[i]);
-    stars[i].z = rand(); // keep initial
-  }
-
-  // ===== Timeline (Cinematic) =====
-  // Total loop length seconds
-  const LOOP = 28.0;
-
-  // events: zoom-in, warp, exit, zoom-out with a "core pass" moment
-  function timeline(u){ // u: 0..1 over LOOP
-    const t = u * LOOP;
-
-    // segments (seconds)
-    const ZIN_START = 0.0,  ZIN_END = 7.5;
-    const WARP_START = 6.8, WARP_END = 16.5;
-    const ZOUT_START = 15.5, ZOUT_END = 26.5;
-
-    // 0..1 each
-    const zin  = clamp((t - ZIN_START)  / (ZIN_END  - ZIN_START),  0, 1);
-    const warp = clamp((t - WARP_START) / (WARP_END - WARP_START), 0, 1);
-    const zout = clamp((t - ZOUT_START) / (ZOUT_END - ZOUT_START), 0, 1);
-
-    // cinematic easings
-    const Z = 1 + easeInOut(zin)*7.2 - easeInOut(zout)*6.2; // zoom factor
-    const W = smooth(warp);                                  // warp intensity
-
-    // "core pass" punch moment inside warp
-    const pass = Math.exp(-Math.pow((t-11.5)/0.45, 2)); // sharp peak
-    // flash peaks at entry and exit of warp
-    const flashIn  = Math.exp(-Math.pow((t-7.3)/0.22, 2));
-    const flashOut = Math.exp(-Math.pow((t-16.3)/0.28,2));
-
-    return { t, zin, warp, zout, zoom: Z, warpI: W, pass, flash: (flashIn+flashOut) };
-  }
-
-  // ===== Render Helpers =====
-  function clearWithFade(alpha){
-    ctx.fillStyle = `rgba(0,0,0,${alpha})`;
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-  }
-
-  function vignette(intensity){
-    const w = canvas.width, h = canvas.height;
-    const r = Math.max(w,h)*0.62;
-    const gx = ctx.createRadialGradient(w/2,h/2,r*0.15, w/2,h/2,r);
-    gx.addColorStop(0, `rgba(0,0,0,0)`);
-    gx.addColorStop(1, `rgba(0,0,0,${intensity})`);
-    ctx.fillStyle = gx;
-    ctx.fillRect(0,0,w,h);
-  }
-
-  function drawBloomComposite(){
-    // Additive-ish composite: glow buffer over main
-    ctx.save();
-    ctx.globalCompositeOperation = "screen";
-    ctx.globalAlpha = 0.95;
-    ctx.drawImage(glow, 0, 0);
-    ctx.restore();
-  }
-
-  // ===== Main Drawing =====
-  function drawFrame(now){
-    const dt = Math.min(0.033, (now - state.last)/1000);
-    state.last = now;
-    state.t += dt;
-
-    const u = (state.t % LOOP) / LOOP;
-    const tl = timeline(u);
-
-    // subtle parallax from pointer
-    state.parX = lerp(state.parX, state.mx, 0.05);
-    state.parY = lerp(state.parY, state.my, 0.05);
-
-    // Base fade for trails (less fade during warp for intensity)
-    const fade = lerp(0.22, 0.10, tl.warpI);
-    clearWithFade(fade);
-
-    // Clear glow buffer each frame but keep some trail
-    gtx.fillStyle = `rgba(0,0,0,${lerp(0.35, 0.16, tl.warpI)})`;
-    gtx.fillRect(0,0,glow.width,glow.height);
-
-    const w = canvas.width, h = canvas.height;
-    const cx = w/2, cy = h/2;
-
-    // Galaxy rotation speed increases slightly near pass
-    const spin = (state.t*0.18) + tl.pass*1.4;
-
-    // lensing / distortion
-    const lensI = tl.warpI*0.85 + tl.pass*1.0;
-
-    // warp shake (micro camera impulse)
-    const shake = (tl.flash*10 + tl.pass*6) * (1 + tl.warpI);
-    const sx = (hash(state.t*60.1)-0.5) * shake;
-    const sy = (hash(state.t*83.7)-0.5) * shake;
-
-    // Camera transform: zoom + parallax
-    ctx.save();
-    ctx.translate(cx + sx + state.parX*30, cy + sy + state.parY*22);
-    ctx.scale(tl.zoom, tl.zoom);
-
-    // ===== Background Nebula (soft color fog) =====
-    // Use a few moving gradients to create depth
-    const fogA = (Math.sin(state.t*0.15)+1)/2;
-    const fogB = (Math.sin(state.t*0.11+2.0)+1)/2;
-    const fogC = (Math.sin(state.t*0.09+4.0)+1)/2;
-
-    for(let k=0;k<3;k++){
-      const px = (k-1)*0.28*cx + (k===0? fogA : k===1? fogB : fogC)*0.22*cx;
-      const py = (k-1)*0.18*cy + (k===0? fogC : k===1? fogA : fogB)*0.18*cy;
-      const rr = Math.min(w,h) * (0.65 + k*0.12);
-      const gr = ctx.createRadialGradient(px,py, rr*0.05, px,py, rr);
-      const hue = 200 + k*45 + fogB*30;
-      gr.addColorStop(0, `rgba(90,140,255,${0.10*(1-tl.warpI)})`);
-      gr.addColorStop(0.55, `hsla(${hue},95%,55%,${0.07*(1-tl.warpI)})`);
-      gr.addColorStop(1, `rgba(0,0,0,0)`);
-      ctx.fillStyle = gr;
-      ctx.fillRect(-cx,-cy, w, h);
-    }
-
-    // ===== Galaxy Draw Function (shared) =====
-    function drawGalaxyLayer(arr, layerAlpha, glowBoost){
-      const R = Math.min(w,h)*0.52;
-      for(let i=0;i<arr.length;i++){
-        const s = arr[i];
-
-        // spiral
-        const a = s.a + spin + s.rr*2.6;
-        const r = s.rr * R;
-
-        let x = Math.cos(a) * r;
-        let y = Math.sin(a) * r;
-
-        // gravitational lens style: amplify near center during warp
-        const d = Math.sqrt(x*x+y*y) + 0.0001;
-        const f = 1 + lensI / (1 + d*0.02);
-        x *= f; y *= f;
-
-        // thickness / turbulence
-        const tw = (hash(i*17.3 + state.t*0.9) - 0.5) * (tl.warpI*10 + 2);
-        const th = (hash(i*19.7 + state.t*0.7) - 0.5) * (tl.warpI*8  + 2);
-        x += tw; y += th;
-
-        // fade galaxy out as warp fully takes over
-        const aFade = (1 - tl.warpI);
-        const alpha = s.alpha * layerAlpha * aFade;
-
-        // draw tiny star
-        ctx.fillStyle = `hsla(${s.hue},${s.sat}%,${s.lig}%,${alpha})`;
-        const sz = s.size * (0.75 + tl.zoom*0.06);
-        ctx.fillRect(x, y, sz, sz);
-
-        // glow buffer (pseudo-bloom)
-        if(glowBoost > 0){
-          gtx.save();
-          gtx.translate(cx + sx + state.parX*30, cy + sy + state.parY*22);
-          gtx.scale(tl.zoom, tl.zoom);
-          gtx.fillStyle = `hsla(${s.hue},${s.sat}%,${Math.min(85, s.lig+10)}%,${alpha*0.55*glowBoost})`;
-          gtx.fillRect(x, y, sz*1.6, sz*1.6);
-          gtx.restore();
-        }
-      }
-    }
-
-    // ===== Core Glow (big luminous center) =====
-    // Make the "this is the core" unmistakable
-    const corePulse = 0.35 + 0.65*Math.sin(state.t*1.2)*0.5 + 0.35*tl.pass;
-    const coreR = Math.min(w,h) * (0.06 + 0.02*corePulse);
-    const coreG = ctx.createRadialGradient(0,0, 0, 0,0, coreR*(1+tl.zoom*0.06));
-    coreG.addColorStop(0.0, `rgba(255,255,255,${0.38*(1-tl.warpI) + 0.35*tl.pass})`);
-    coreG.addColorStop(0.2, `rgba(170,220,255,${0.22*(1-tl.warpI) + 0.25*tl.pass})`);
-    coreG.addColorStop(0.55, `rgba(120,160,255,${0.12*(1-tl.warpI)})`);
-    coreG.addColorStop(1.0, `rgba(0,0,0,0)`);
-    ctx.fillStyle = coreG;
-    ctx.beginPath();
-    ctx.arc(0,0, coreR*(1+tl.zoom*0.05), 0, Math.PI*2);
-    ctx.fill();
-
-    // galaxy layers
-    drawGalaxyLayer(galaxyNeb,  0.55, 0.35);
-    drawGalaxyLayer(galaxyArms, 0.95, 0.65);
-    drawGalaxyLayer(galaxyCore, 1.15, 0.95);
-
-    // ===== Spiral "arms" highlight lines (subtle) =====
-    ctx.save();
-    ctx.globalAlpha = 0.16*(1-tl.warpI) + 0.06;
-    ctx.strokeStyle = "rgba(140,220,255,0.35)";
-    ctx.lineWidth = 1;
-    const armCount = 3;
-    for(let a=0;a<armCount;a++){
+  // warp
+  if(warpOn>0){
+    warp.forEach(w=>{
+      w.z-=0.02*warpOn;
+      if(w.z<0.02) reset(w);
+      const x=CX()+w.x/w.z*CX();
+      const y=CY()+w.y/w.z*CY();
+      const len=(1-w.z)*25*warpOn;
+      ctx.strokeStyle="rgba(255,255,255,0.8)";
       ctx.beginPath();
-      for(let j=0;j<520;j++){
-        const rr = j/520;
-        const ang = rr*10 + a*(Math.PI*2/armCount) + spin*0.8;
-        const r = rr*Math.min(w,h)*0.52;
-        let x = Math.cos(ang)*r;
-        let y = Math.sin(ang)*r;
-        const d = Math.sqrt(x*x+y*y)+0.0001;
-        const f = 1 + lensI / (1 + d*0.03);
-        x *= f; y *= f;
-        if(j===0) ctx.moveTo(x,y);
-        else ctx.lineTo(x,y);
-      }
+      ctx.moveTo(x,y);
+      ctx.lineTo(x-w.x*len,y-w.y*len);
       ctx.stroke();
-    }
-    ctx.restore();
-
-    ctx.restore(); // end camera transform
-
-    // ===== Warp / Hyperspace Flythrough =====
-    if(tl.warpI > 0.001){
-      // Add a faint center tunnel gradient
-      const tunnel = ctx.createRadialGradient(cx,cy, 0, cx,cy, Math.min(w,h)*0.8);
-      tunnel.addColorStop(0,   `rgba(255,255,255,${0.06*tl.warpI})`);
-      tunnel.addColorStop(0.2, `rgba(80,140,255,${0.05*tl.warpI})`);
-      tunnel.addColorStop(1,   `rgba(0,0,0,0)`);
-      ctx.fillStyle = tunnel;
-      ctx.fillRect(0,0,w,h);
-
-      // star streaks
-      ctx.save();
-      ctx.globalCompositeOperation = "lighter";
-      ctx.lineWidth = 1.2 * state.dpr;
-
-      const speed = 0.035 + tl.warpI*0.11 + tl.pass*0.25;
-      const streakBase = 18 + tl.warpI*55 + tl.pass*120;
-
-      for(let i=0;i<stars.length;i++){
-        const s = stars[i];
-
-        // advance
-        s.z -= speed;
-        if(s.z < 0.02) resetStar(s);
-
-        // perspective
-        const px = cx + (s.x / s.z) * cx;
-        const py = cy + (s.y / s.z) * cy;
-
-        // radial direction for streak
-        const dx = px - cx;
-        const dy = py - cy;
-        const inv = 1 / (Math.sqrt(dx*dx + dy*dy) + 1e-6);
-        const ux = dx * inv;
-        const uy = dy * inv;
-
-        // length grows toward viewer; add pass spike
-        const len = (1 - s.z) * streakBase;
-
-        // color with subtle chroma split
-        const a = 0.18 + 0.75*tl.warpI + 0.9*tl.pass;
-        ctx.strokeStyle = `hsla(${s.h},${s.s}%,${s.l}%,${a})`;
-
-        ctx.beginPath();
-        ctx.moveTo(px, py);
-        ctx.lineTo(px - ux*len, py - uy*len);
-        ctx.stroke();
-
-        // bloom buffer: thicker, softer
-        gtx.save();
-        gtx.globalCompositeOperation = "source-over";
-        gtx.strokeStyle = `hsla(${s.h},${s.s}%,${Math.min(90, s.l+8)}%,${a*0.35})`;
-        gtx.lineWidth = 2.8 * state.dpr;
-        gtx.beginPath();
-        gtx.moveTo(px, py);
-        gtx.lineTo(px - ux*len*0.85, py - uy*len*0.85);
-        gtx.stroke();
-        gtx.restore();
-      }
-
-      ctx.restore();
-    }
-
-    // ===== Shockwave Rings (warp entry/exit + core pass) =====
-    // flash moment creates expanding rings
-    const ringStrength = clamp(tl.flash + tl.pass*0.8, 0, 1);
-    if(ringStrength > 0.001){
-      ctx.save();
-      ctx.globalCompositeOperation = "screen";
-      const base = Math.min(w,h);
-
-      // 2 rings
-      for(let k=0;k<2;k++){
-        const p = (tl.t + k*0.18) % 1; // not truly periodic; just offset
-        const prog = clamp((ringStrength*2.2) + k*0.35, 0, 1);
-        const R = (0.08 + prog*0.85) * base;
-
-        ctx.lineWidth = (2.0 + (1-prog)*4.0) * state.dpr;
-        ctx.strokeStyle = `rgba(180,230,255,${0.55*(1-prog)*ringStrength})`;
-        ctx.beginPath();
-        ctx.arc(cx, cy, R, 0, Math.PI*2);
-        ctx.stroke();
-
-        // glow ring in buffer
-        gtx.save();
-        gtx.strokeStyle = `rgba(160,210,255,${0.30*(1-prog)*ringStrength})`;
-        gtx.lineWidth = (7.0 + (1-prog)*10.0) * state.dpr;
-        gtx.beginPath();
-        gtx.arc(cx, cy, R, 0, Math.PI*2);
-        gtx.stroke();
-        gtx.restore();
-      }
-      ctx.restore();
-    }
-
-    // ===== Flash Overexposure (warp entry/exit) =====
-    if(tl.flash > 0.001){
-      const f = clamp(tl.flash*1.6, 0, 1);
-      ctx.save();
-      ctx.globalCompositeOperation = "screen";
-      ctx.fillStyle = `rgba(255,255,255,${0.22*f})`;
-      ctx.fillRect(0,0,w,h);
-      ctx.restore();
-    }
-
-    // composite pseudo-bloom
-    drawBloomComposite();
-
-    // vignette for cinema look (stronger in warp)
-    vignette(lerp(0.42, 0.58, tl.warpI));
-
-    requestAnimationFrame(drawFrame);
+    });
   }
 
-  resize();
-  // init clear
-  ctx.fillStyle="#000"; ctx.fillRect(0,0,canvas.width,canvas.height);
-  gtx.fillStyle="#000"; gtx.fillRect(0,0,glow.width,glow.height);
-  requestAnimationFrame((n)=>{ state.last=n; drawFrame(n); });
-})();
+  // title reveal
+  if(time>3 && time<9){
+    ctx.save();
+    ctx.fillStyle="rgba(255,255,255,0.6)";
+    ctx.font="48px serif";
+    ctx.textAlign="center";
+    ctx.fillText("GALAXY REQUIEM",CX(),CY()+innerHeight*0.28);
+    ctx.restore();
+  }
+
+  t+=0.016;
+  requestAnimationFrame(draw);
+}
+
+draw();
 </script>
 </body>
 </html>
