@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>animation-test</title>
+
   <style>
     :root{color-scheme:dark;}
     body{
@@ -12,6 +13,7 @@
       background:#0b0f14;
       color:#e6edf3;
     }
+
     header{
       padding:16px 18px;
       border-bottom:1px solid #223044;
@@ -19,8 +21,16 @@
       gap:12px;
       align-items:center;
     }
-    header h1{margin:0;font-size:18px;font-weight:700;}
-    header .right{margin-left:auto;display:flex;gap:8px}
+    header h1{
+      margin:0;
+      font-size:18px;
+      font-weight:700;
+    }
+    header .right{
+      margin-left:auto;
+      display:flex;
+      gap:8px;
+    }
 
     .btn{
       padding:8px 14px;
@@ -32,13 +42,14 @@
       font-size:12px;
       font-weight:600;
     }
-    .btn:hover{background:#162033}
+    .btn:hover{background:#162033;}
 
     main{
       display:grid;
       grid-template-columns:280px 1fr;
       min-height:calc(100vh - 56px);
     }
+
     nav{
       border-right:1px solid #223044;
       padding:14px;
@@ -61,7 +72,9 @@
     }
     nav a:hover{background:#0f1722;}
 
-    .viewer{position:relative;}
+    .viewer{
+      position:relative;
+    }
     iframe{
       position:absolute;
       inset:0;
@@ -70,6 +83,7 @@
       border:0;
       background:#000;
     }
+
     .hint{
       margin-top:14px;
       font-size:12px;
@@ -84,13 +98,8 @@
     <h1>animation-test</h1>
 
     <div class="right">
-      <!-- playground.html -->
-      <a class="btn" href="playground.html">
-        ▶ Playground
-      </a>
-
-      <!-- index.md (docs) -->
-      <a class="btn" href="docs/">
+      <!-- docs/index.md -->
+      <a class="btn" href="docs/" target="_blank">
         📘 index.md
       </a>
     </div>
@@ -98,6 +107,12 @@
 
   <main>
     <nav>
+      <!-- ★ Playground を iframe 表示に統一 -->
+      <a href="playground.html" target="view">
+        PLAYGROUND
+        <small>HTML / JS / Canvas を即実行</small>
+      </a>
+
       <a href="galaxy.html" target="view">
         GALAXY 10^6
         <small>fragment shader / spiral</small>
@@ -114,13 +129,14 @@
       </a>
 
       <div class="hint">
-        ・左のリンクで表示切替<br>
-        ・画面クリックでフルスクリーン（対応ブラウザ）<br>
-        ・Playground はコード即実行用
+        ・左メニューで表示切替<br>
+        ・すべて iframe 内で実行<br>
+        ・Playground は貼り付け実験用
       </div>
     </nav>
 
     <section class="viewer">
+      <!-- 初期表示 -->
       <iframe name="view" src="galaxy.html"></iframe>
     </section>
   </main>
