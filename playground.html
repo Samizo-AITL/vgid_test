@@ -1,12 +1,31 @@
-float head = length(p - vec2(0.0, 0.35)) - 0.12;
-float body = max(
-  abs(p.x) - 0.08,
-  abs(p.y + 0.1) - 0.35
-);
-float legs = min(
-  length(p - vec2(-0.06, -0.45)) - 0.18,
-  length(p - vec2( 0.06, -0.45)) - 0.18
-);
+precision highp float;
 
-float human = min(head, min(body, legs));
-float mask = smoothstep(0.02, 0.0, human);
+uniform vec2 uRes;
+uniform float uTime;
+
+void main(){
+  vec2 p = (gl_FragCoord.xy - 0.5 * uRes) / min(uRes.x, uRes.y);
+
+  float head = length(p - vec2(0.0, 0.35)) - 0.12;
+
+  float body = max(
+    abs(p.x) - 0.08,
+    abs(p.y + 0.1) - 0.35
+  );
+
+  float legs = min(
+    length(p - vec2(-0.06, -0.45)) - 0.18,
+    length(p - vec2( 0.06, -0.45)) - 0.18
+  );
+
+  float human = min(head, min(body, legs));
+  float mask = smoothstep(0.02, 0.0, human);
+
+  vec3 col = mix(
+    vec3(0.0),
+    vec3(0.8, 0.9, 1.0),
+    mask
+  );
+
+  gl_FragColor = vec4(col, 1.0);
+}
