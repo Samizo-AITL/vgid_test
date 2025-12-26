@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Shader Playground</title>
+<title>HTML Playground</title>
 
 <style>
   :root{color-scheme:dark;}
@@ -30,14 +30,11 @@
     font-weight:700;
     cursor:pointer;
   }
-  button:hover{opacity:.9}
-
   main{
     display:grid;
     grid-template-columns:1fr 1fr;
     height:calc(100vh - 46px);
   }
-
   textarea{
     width:100%;
     height:100%;
@@ -51,11 +48,10 @@
     font-size:13px;
     line-height:1.45;
   }
-
-  canvas{
+  iframe{
     width:100%;
     height:100%;
-    display:block;
+    border:none;
     background:#000;
   }
 </style>
@@ -63,150 +59,103 @@
 
 <body>
 <header>
-  <strong>Shader Playground</strong>
+  <strong>HTML Playground</strong>
   <button onclick="run()">▶ Run</button>
-  <span style="opacity:.6;font-size:12px">fragment shader only</span>
+  <span style="opacity:.6;font-size:12px">HTML / JS / Canvas OK</span>
 </header>
 
 <main>
-  <textarea id="fs"></textarea>
-  <canvas id="c"></canvas>
+  <textarea id="code"></textarea>
+  <iframe id="view"></iframe>
 </main>
 
 <script>
-/* ========= WebGL 初期化 ========= */
-const canvas = document.getElementById("c");
-const gl = canvas.getContext("webgl");
-if(!gl){
-  alert("WebGL not supported");
-}
+const textarea = document.getElementById("code");
+const iframe   = document.getElementById("view");
 
-/* ========= 画面サイズ ========= */
+// 初期サンプル（普通の Canvas アニメ）
+textarea.value = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Normal Animation</title>
+<style>
+  html,body{margin:0;width:100%;height:100%;background:#0b1d2a;overflow:hidden;}
+  canvas{display:block;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+
 function resize(){
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  canvas.width  = Math.floor(innerWidth  * dpr);
-  canvas.height = Math.floor(innerHeight * dpr);
-  gl.viewport(0, 0, canvas.width, canvas.height);
+  c.width = innerWidth;
+  c.height = innerHeight;
 }
-window.addEventListener("resize", resize);
+addEventListener("resize", resize);
 resize();
 
-/* ========= 固定 vertex shader ========= */
-const vsSrc = `
-attribute vec2 p;
-void main(){
-  gl_Position = vec4(p, 0.0, 1.0);
+let t = 0;
+let x = -80;
+let last = performance.now();
+
+function loop(now){
+  const dt = (now-last)*0.001;
+  last = now;
+  t += dt;
+  x += 120*dt;
+  if(x > c.width+80) x = -80;
+
+  const y = c.height*0.5 + Math.sin(t*2)*40;
+
+  ctx.clearRect(0,0,c.width,c.height);
+
+  // 背景
+  const g = ctx.createLinearGradient(0,0,0,c.height);
+  g.addColorStop(0,"#2a6fa8");
+  g.addColorStop(1,"#06131d");
+  ctx.fillStyle=g;
+  ctx.fillRect(0,0,c.width,c.height);
+
+  // 魚
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.rotate(Math.sin(t*2)*0.05);
+
+  ctx.fillStyle="#ffcc66";
+  ctx.beginPath();
+  ctx.ellipse(0,0,40,18,0,0,Math.PI*2);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(-40,0);
+  ctx.lineTo(-65,-15);
+  ctx.lineTo(-65,15);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle="#000";
+  ctx.beginPath();
+  ctx.arc(15,-5,3,0,Math.PI*2);
+  ctx.fill();
+
+  ctx.restore();
+
+  requestAnimationFrame(loop);
 }
-`;
+requestAnimationFrame(loop);
+<\/script>
+</body>
+</html>`;
 
-/* ========= 初期 fragment shader（人型SDF） ========= */
-const fsArea = document.getElementById("fs");
-fsArea.value = `
-precision highp float;
-
-uniform vec2  uRes;
-uniform float uTime;
-
-void main(){
-  vec2 p = (gl_FragCoord.xy - 0.5 * uRes) / min(uRes.x, uRes.y);
-
-  float head = length(p - vec2(0.0, 0.35)) - 0.12;
-
-  float body = max(
-    abs(p.x) - 0.08,
-    abs(p.y + 0.1) - 0.35
-  );
-
-  float legs = min(
-    length(p - vec2(-0.06, -0.45)) - 0.18,
-    length(p - vec2( 0.06, -0.45)) - 0.18
-  );
-
-  float human = min(head, min(body, legs));
-  float mask = smoothstep(0.02, 0.0, human);
-
-  vec3 col = mix(
-    vec3(0.0),
-    vec3(0.8, 0.9, 1.0),
-    mask
-  );
-
-  gl_FragColor = vec4(col, 1.0);
-}
-`;
-
-/* ========= shader compile / link ========= */
-function compile(type, src){
-  const s = gl.createShader(type);
-  gl.shaderSource(s, src);
-  gl.compileShader(s);
-  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)){
-    throw gl.getShaderInfoLog(s);
-  }
-  return s;
-}
-
-let program, uResLoc, uTimeLoc;
-
-/* ========= Run ========= */
 function run(){
-  try{
-    if(program) gl.deleteProgram(program);
-
-    const vs = compile(gl.VERTEX_SHADER, vsSrc);
-    const fs = compile(gl.FRAGMENT_SHADER, fsArea.value);
-
-    program = gl.createProgram();
-    gl.attachShader(program, vs);
-    gl.attachShader(program, fs);
-    gl.linkProgram(program);
-
-    if(!gl.getProgramParameter(program, gl.LINK_STATUS)){
-      throw gl.getProgramInfoLog(program);
-    }
-
-    gl.useProgram(program);
-
-    const buf = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-    gl.bufferData(
-      gl.ARRAY_BUFFER,
-      new Float32Array([
-        -1,-1,  1,-1, -1, 1,
-        -1, 1,  1,-1,  1, 1
-      ]),
-      gl.STATIC_DRAW
-    );
-
-    const loc = gl.getAttribLocation(program, "p");
-    gl.enableVertexAttribArray(loc);
-    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-
-    uResLoc  = gl.getUniformLocation(program, "uRes");
-    uTimeLoc = gl.getUniformLocation(program, "uTime");
-
-    start();
-  }catch(e){
-    alert(e);
-  }
+  // iframe に HTML を直接流し込む
+  iframe.srcdoc = textarea.value;
 }
 
-/* ========= 描画ループ ========= */
-let t0 = 0;
-function start(){
-  t0 = performance.now();
-  requestAnimationFrame(draw);
-}
-
-function draw(now){
-  gl.useProgram(program);
-  gl.uniform2f(uResLoc, canvas.width, canvas.height);
-  gl.uniform1f(uTimeLoc, (now - t0) * 0.001);
-  gl.drawArrays(gl.TRIANGLES, 0, 6);
-  requestAnimationFrame(draw);
-}
-
-/* ========= 初回実行 ========= */
+// 初回実行
 run();
 </script>
 </body>
